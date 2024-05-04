@@ -1,0 +1,357 @@
+---
+title: "Forest structural analysis with R-scrip using the output file of pyMANGA"
+author: "Zabihullah Sherzad"
+email: "sherzadzabihullah@yahoo.com"
+format: html
+editor: visual
+toc: true
+toc-depth: 4
+number-sections: true
+code-fold: true
+bibliography: references.bib
+---
+
+# Introduction
+
+Forest structure refers to the distribution of individual plants and the relationships between their attributes and characteristics. The study and analysis of forest structure helps us to understand the history, current status and future development of forest ecosystems. It is particularly important to study forest structure in order to understand the characteristics of the forest community and the implications for forest protection and management. [@hui2019]. Numerous factors such as drought, salinity, temperature, competition, soil type and condition and other biotic and abiotic disturbances directly or indirectly influence the structural characteristics of individual plants in a forests [@attiwill1994]. Among the individual characteristics describing forest structure, such as stand density, horizontal distribution pattern, tree species configuration, height, crown, tree slenderness and tree size distribution....etc. are particularly important and play a key role in the structure, function and biochemical cycling of forest ecosystems. Changes in any of these attributes and characteristics of the individual plant result in changes in forest structure and phenotype, reflecting the different aspects of forest structure. [@hui2019].
+
+pyMANGA is an open source platform used to collect individual plant model components such as plant establishment, growth or competition in response to above and below ground resource availability which allows the simulation of forest dynamics regarding the individual-based description of forests with different processes and concepts. [@wimmler2024]. pyMANGA is a suitable platform to calculate some important forest structure attributes such as plant growth, height, stem radius (r_stem), root radius (r_root) and crown radius (r_crown).
+
+Given the above, the main goal of our current work is to provide an R-Script which demonstrates and supports the statistical analysis of simulation outputs produced by an examplified of pyMANGA experiment. The objectives of our current script are to (1) visualize the variables and attributes produced by pyMANGA , (2) to increase and find other important attributes and measurements using statistical analysis and formulas which will make it possible to find the overall structure and phenotype of the forests and would represent the full package of a mangrove forest's structure and physical appearance.
+
+# Materials and Methods
+
+## pyMANGA platform
+
+To study the different attributes, characters and phenotype of individuals in a forest and to predict the overall structure and visualize different physiological and morphological changes in a mangroves forest, pyMANGA setup was used to generate the output file \[link\] ([https://github.com/pymanga/pyMANGA]{.underline}).
+
+pyMANGA is an open resource model setup which combine different concepts and of plants establishment, growth or competition in response to above- and below-ground resource availability in mangroves. All parameters and attributes in pyMANGA are defined with international System of Units (SI) as documented in the documentation part of the setup.
+
+### Input file
+
+As per the requirement, an input (XML) file was prepared to run the setup of pyMANGA and to generate the plant attributes. The input file had different parts and sections like plant dynamics, time loops, underground and above ground resources...etc as described below.
+
+#### Above and below ground resources
+
+For above ground resources, Asymmetric zone of influence `AsymmetricZOI` was selected under type option. Both `X_resolution` was selected as 150 and `y_resolution` was also selected as 50. For subsurface resources, `FixedSalinity` was selected under Type section and `Forman` model was selected under Variant. `min_x` and `max_x` were selected from 0 to 22m. Salinity was selected from `0.025` to `0.035` kg/kg (25 to 35 ppt)
+
+#### Plant dynamics and Population
+
+The growth and death of trees is configured in this section. In our current example, two species such as Avicenna and Laguncularia have been selected for simulation. Under Species, file paths were added for each species. `KIWI` was selected as the vegetation model type as described by [@berger2000]. In our current example, the initial population was set to 10 and plant recruitment was set to 5 plants per time step.
+
+#### Time Loops and the Total area
+
+Different time steps have been selected in this section. In our current input file, the start time (t_start) was set to zero seconds, the end time was set to 493.828 years (15.58e9 seconds) , and each time step was set to 0.28 year (9.12e6 seconds) seconds. The total area was set to 484m\^2 on x and y position as `x_2 = 40` and `y_2 = 40`.
+
+#### Description of the output file
+
+The last section of our input file was customized based on how we wanted to save our result and output file of our simulation. In our input file we selected `oneFile` (Selection of one file is needed to be selected) under the out_directory of the input file. The path where we wanted our output file to be saved was included in the output_dir of our file. In the output section of our file, we selected different parameters like; r_stem, height, crown, r_root, growth...etc.
+
+### Running of pyMANGA setup
+
+After the preparation of the input file as above, the input file was then applied to pyMNAGA platform and the setup was run accordingly. PyMANGA output file was then copied to our R-directory as in the figure below;
+
+![](images/pic-01.png){width="675"}
+
+### Data importing and sorting into R
+
+After copying the pyMANGA output file to our R-directory, the data was transformed and statistically formulated as below.
+
+```{r echo = TRUE, message=FALSE, warning=FALSE, results ='hide'}
+
+# Data import
+population <- read.csv("Population.csv",
+                             sep = '\t', header = TRUE)
+
+# Packages Required and installation 
+library('tidyverse')
+install.packages()
+
+#splitting a specific column into tow columns
+pymanga_data <- population %>% 
+  rowwise() %>% 
+  mutate(species = strsplit(plant, "_")[[1]][1],
+         year = time/3600/24/365.25)%>%
+  group_by(year) %>%
+  mutate(x_max = max(x),
+         y_max = max(y),
+         model_area_hectar = x_max * y_max/10000)
+  
+
+```
+
+# Results
+
+## Structural variables
+
+### Plant density and Tree size
+
+The number of trees per unit area is an essential structural variable and indicator of forest phenotype. The increase in stand density intensifies the spatial competition among individual trees, which may decrease the crown size by reducing the growing space available to trees which plays an important role in forest ecosystems, structure and physical appearance [@benomar2012]. In addition, diameter at breast height (DBH) distribution is another the most basic stand structure characteristics in plant community. Plant DBH is a useful tool in forest structure determination and for predicting stand growth and yield, updating forest inventory, and planning forest sustainable management activities such as thinning or rotation length [@liu2014].
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>%
+    group_by(year, species) %>%
+    reframe(
+        no_trees = n(),
+        TreeDensity = no_trees / model_area_hectar,
+        SumOfDBH = sum(2 * r_stem)
+    ) %>%
+    gather(., key, value, TreeDensity, SumOfDBH) %>%
+    ggplot(., aes(x = year, y = value, col = species)) +
+    geom_line() +
+    facet_wrap( ~ key, scales = "free", ncol = 1, labeller = labeller(key = c(TreeDensity = "Plants Density", SumOfDBH = "Plant Basal Area")))+
+  xlab("year") +
+  ylab("The number of trees/hectar      Species basal area (m)")
+
+```
+
+### Stand Basal Area
+
+Stand Basal area or tree basel area (TBA) is the common term used to describe the average amount of an area occupied by trees stems and is defined, as the total cross-sectional area of all stems in a stand measured at breast height per unit of land area. Basal area is used in both ecology and forest management as a fundamental measure of stand structure and is closely related to stand volume and tree competition. Tree basal area growth is inversely related to the number of trees in a given area. Basal area of trees decreases with increasing number of trees. [@rozendaal2020]. Plant species dominance in a forests also depends in their greater basal area and large size [@baker2004]. Trees basal area can be calculated in a specific unite of the area following the equation as, $TBA = {pi * r^2}$ [@bettinger2017a]. where `TBA=Tress basal area`, `pi=3.14159265359` and `r=r_stem`.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>% 
+    mutate(tba = pi * r_stem^2) %>% 
+    group_by(species, year) %>%
+    reframe(tba_s = sum(tba) /model_area_hectar) %>% 
+    ggplot(., aes(x = year, y = tba_s, col = species)) +
+    geom_line() +
+    labs(x = "Year",
+         y = "Basal area (m² per hectar)",
+         col = "Species")+
+  theme_bw()
+
+```
+
+### Tree Height
+
+Tree height is an important structural trait that is critical in forest ecology and for estimating above ground biomass. Tree height can indicate forest health conditions and is one of the most important variables in forest structure and physiology. [@vagliolaurin2019] .
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>% 
+  group_by(species, year) %>% 
+  reframe(tree_height_m = mean(height, na.rm = T),
+          tree_height_sd = sd(height, na.rm = T)) %>% 
+  ggplot(., aes(x = year, y = tree_height_m, col = species, size=5)) +
+  geom_ribbon(aes(ymin = tree_height_m - tree_height_sd,
+                  ymax = tree_height_m + tree_height_sd,
+                  fill = species),
+              alpha = 0.2,
+              size=0.1) +
+  geom_line(size = 1) +
+    labs(x = "Year",
+         y = "Tree height in meter (mean \u00b1 SD)",
+         col = "Species",
+         fill = "Species") +
+  theme_bw()
+
+```
+
+### Crown Size
+
+Tree crown refers to the shape, size, and placement of tree structures in three-dimensional space and the structural organization of the branching system.[@godin1999]. Individual tree crown volume is a fundamental tree characteristic that correlates with forest biomass production and most relevant ecosystem, forest structure, and environmental functions. [@zhu2020]. The crown size is calculated from the radius of crown (`r_crown`) as `Crown = r_crown * 2`.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+pymanga_data %>% 
+  group_by(species, year) %>% 
+  mutate(plantCrown = mean(r_crown * 2, na.rm = T)) %>% 
+  ggplot(., aes(x = year, y = plantCrown, col = species)) +
+  geom_point()+
+  xlab('Year')+
+  ylab('Plant Crown Size (m)')+
+  theme_bw()
+
+```
+
+### Live Crown Ratio (LCR)
+
+LCR is an important indicator of tree health and vitality. A higher LCR generally indicates a healthier tree with more live foliage relative to total height.[@stancioiu2021], which provides information on photosynthetic capacity and stem diameter and growth vitality, and indirectly on stability in relation to stand density and the level of neighboring competition. The live crown ratio of trees could be obtained using the following equation; $LCR = \frac{CL}{Ttot}$. where `LCR= live crown ratio`, `CL= crown lenght` and `Ttot = Total height of plant` [@akram2019]
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, eval=TRUE}
+
+pymanga_data %>% 
+  group_by(species, year) %>% 
+  reframe(crown_diamter = mean(r_crown*2, na.rm = T),
+          trees_hieght = mean(height, na.r = T),
+          live_crown_ratio = crown_diamter/trees_hieght) %>% 
+  ggplot(., aes(x = year, y = live_crown_ratio, col = species)) +
+  geom_line()+
+  xlab('Year')+
+  ylab('Live Crown Ratio') +
+  theme_bw()
+
+```
+
+### Tree Root area
+
+Tree root area or the diameter of plant roots, is an important characteristic that plays a crucial role in the overall health and function of plants. Plants with a high roots area get more access to nutrient and water absorption. [@kong2014] [@stokes2009]. The mean area of the roots for every single species is calculated from the `r_root` as, `Root area= r_root * 2`
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+pymanga_data %>% 
+  group_by(species, year) %>% 
+  reframe(RootsDiameter = mean(r_root*2, na.rm = T),
+          sdrstem = sd(r_root*2, na.rm = T)) %>% 
+  ggplot(., aes(x = year, y = RootsDiameter, col = species)) +
+  geom_point()+
+  geom_errorbar(
+    aes(ymin = RootsDiameter - sdrstem, ymax = RootsDiameter + sdrstem)) +
+  facet_wrap(~species, ncol = 1) +
+  xlab('Year')+
+  ylab('Roots Diameter (m)')+
+  theme_bw()
+
+```
+
+## Growth and Allometric variables
+
+### Tree slenderness index (SI)
+
+Tree slenderness index is the ratio of tree height to diameter (HDR) used to analyze tree and stand stability and is an important index of tree stability. High values of height to diameter ratio (HDR) indicate that trees have grown in a dense stand. Lower HDR values indicate longer crown length, higher crown projection area, better developed root system, lower center of gravity position and higher stability of the trees. Therefore, trees with higher HDR values (slender trees) are much more resistant to wind damage. The effectiveness and efficiency of thinning can also be assessed by estimating HDR variations. HDR is used to assess tree vigor and health, and is an important predictor to describe competition effects in various forest models. [@karamzadeh2023]. The height-to-diameter ratio (HDR) or slenderness(SI) could be computed as the ratio of total tree height to diameter at breast height (DBH) for each tree using the equation $SI = \frac{Height}{DBH}$ [@benomar2012a]. The Trees could be grouped into slenderness coefficient classes as (1) high slender trees; SI \> 99, (2) moderate slender trees: 70\<SI\<99, and (3) low slender trees; SI \< 70 [@oladoye2020].
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>% 
+    mutate(slenderness = height / (2*r_stem)) %>% 
+    group_by(species, year) %>% 
+    reframe(slenderness_mean = mean(slenderness, na.rm = T)) %>% 
+    ggplot(., aes(x = year, y = slenderness_mean, col = species)) +
+    geom_line() +
+    labs(y = " Trees slenderness value") +
+  theme_bw()
+```
+
+### Tree Growth Trend (Biomass increment)
+
+`Growth trend` generally refers to the long-term pattern or direction of growth over an extended period of time. Understanding the growth trends of trees in a forest ecosystems is important because of their role in the global carbon and water cycles [@trouillier2020]. In our current example, the growth trend has been estimated in kg per time step of the trees biomass increment as described in pyMANGA documentation.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>%
+  group_by(species, year) %>% 
+  reframe(trees_growth_Meter = growth/100, # As in Kiwi mode the growth is in cm
+          growth_trend_total = sum(growth, na.rm =T),
+          growth_trend_sd = sd(growth, na.rm =T),
+          growth_trend_min = min(growth, na.rm =T),
+          growth_trend_max = max(growth, na.rm =T)) %>% 
+  ggplot(., aes(x = year, y = growth_trend_total, col= species)) + 
+    geom_ribbon(aes(ymin = growth_trend_min, 
+                    ymax = growth_trend_max, 
+                    fill = species),
+                alpha = 0.1, size=0.5) +
+  geom_point(size = 1) +
+  ylab('Growth trend in meters')
+
+```
+
+## Diversity variables
+
+### Tree species composition
+
+Trees species composition refers to the total number of different living organisms within an ecosystem. Species composition is critical for understanding the structure of a specific forest. [@munoz2014][@petchey2002]. In our current script we calculated the individual number of every single species in different time steps regarding the total population [@karamzadeh2023b].
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+pymanga_data %>%
+  group_by(year)%>%
+  mutate(total_number= n()) %>%
+  group_by(species, year)%>% 
+  reframe(species_number= n(), 
+          specie_composition= species_number/total_number*100)%>% 
+  ggplot(., aes(year, specie_composition, col= species)) + 
+  geom_point()+
+  geom_line()+
+  xlab('Year') + ylab("Species Composition/Percentage")+
+  ylab("Species compostion (%)") +
+  theme_bw()
+
+
+```
+
+### Species Diversity
+
+Species diversity is a term used to define the number of species in an area *and* its abundance *and* the distribution of these species in ecosystem which is a crucial concept of biodiversity and is intuitively simple but conceptually complex. A quantitative assessment of species diversity is thus essential for effective biodiversity conservation and management [@zhao2022]. The diversity of tree species is calculated using standard diversity index as `Shannon's diversity index (H')` as follows; $𝑆ℎ𝑎𝑛𝑛𝑜𝑛′𝑠 𝐷𝑖𝑣𝑒𝑟𝑠𝑖𝑡𝑦 𝐼𝑛𝑑𝑒𝑥 (𝐻′) = − ∑ 𝑝𝑖 ln 𝑝𝑖$, where $Pi = \frac{Ni}{N}$. `Pi= proportion`, `Ni = Sum of individual of a species`, `N = Sum of overall species` [@shannon1948] [@zhao2022].
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+
+pymanga_data %>% 
+  group_by(year) %>% 
+  mutate(Total_Number_Of_all_species = n()) %>%
+  group_by(species, year) %>% 
+  reframe(Individual_Numebr_of_species = n(),
+          species_proportion = Individual_Numebr_of_species/Total_Number_Of_all_species, 
+          Lnpi = log10(species_proportion), 
+          species_diversity = -sum(species_proportion*Lnpi)) %>%
+ggplot(., aes(x = year, y = species_diversity, col = species)) +
+  geom_line() +
+  xlab('Year') +
+  ylab('Species Diversity') +
+theme_bw()
+
+
+```
+
+### Species Richness
+
+Species richness is the number of different species that live in a specific area which is commonly been used to explore the relationship between biodiversity and ecosystem multifunctionality (EMF) as the simplest measure of biodiversity [@vanderplas2016] [@li2020]. Increased species richness is beneficial to enhancing EMF through positive interactions between species which plays an important role in shaping the structure and functioning of forest ecosystems, as every species with specific traits contributes differently to ecosystem function[@alsterberg2017] [@lohbeck2016]. In this script, species richness is calculated using the `distint()` function of R functions.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+
+pymanga_data %>% 
+  group_by(year) %>%
+  distinct(species, year) %>% 
+  mutate(SpeciesRichness = n())%>%
+  
+  ggplot(., aes(x = year, y = SpeciesRichness)) +
+  geom_point()+
+  xlab('Year')+
+  ylab('Total available Species (Species richness)')+
+  theme_bw()
+```
+
+### Species Dominance
+
+Species dominance refers to the phenomenon whereby a particular species, typically within an ecosystem or specific environment, exerts significant influence and control over other species and their interactions. Species dominance can be manifested in a variety of ways, including population size, ecological impact, or resource use. Species dominance and community composition in an ecosystem are important for informing management and conservation decisions by maintaining or enhancing existing forest composition and structure. [@lolila2023].
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Calculate total basal area at each time point
+
+species_basal_area<-pymanga_data %>%
+  group_by(species, year) %>%
+  reframe(species_basal_area = sum(pi*r_stem^2)) 
+
+pymanga_data %>%
+  group_by(year) %>%
+  reframe(r_stem= r_stem, 
+          Trees_basal_area = sum(pi*r_stem^2)) %>%
+  left_join(species_basal_area, by= 'year') %>%
+  mutate(species_dominance= species_basal_area/Trees_basal_area*100) %>%
+  ggplot(., aes(x = year, y =  species_dominance, col = species)) +
+  geom_line() +
+  xlab('Year')+
+  ylab('Species relative dominace (%)')+ 
+  theme_bw()
+
+```
+
+### Tree age
+
+The age structure of a forest is a basic parameter of plant population statistics. Knowing the age of plants in a forest is an essential parameter for estimating the forest structure in time interval. The percentage of the number of trees in each age group is related to the total number of trees, which can be presented as a graph of age structure (age pyramid or life table). The trend of population development can be predicted by analyzing the age composition of a given population. [@vastaranta2015]. If a population has a large number of young trees and a small number of old trees, the population is growing rapidly. Conversely, if there are fewer young trees and more old trees, the population is declining. If the number of individual trees in each age group is almost uniform or decreasing uniformly, and the birth rate is close to the death rate, then the population is stable.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+pymanga_data %>% 
+  group_by(year, species) %>% 
+   reframe(tree_age = age/60/60/24/365, 
+           tree_age_m = mean(tree_age, na.rm = TRUE),
+                             sd = sd(tree_age, na.rm= TRUE))%>% 
+  ggplot(., (aes(x = year, y = tree_age_m, col = species))) +
+  geom_ribbon(aes(ymin=tree_age_m - sd, ymax=tree_age_m - sd,
+                  fill = species), alpha = 0.1) +
+  facet_wrap(~species, ncol = 1)+
+  geom_line() +
+  xlab('year')+
+  ylab('Trees age (years)')+ 
+  theme_bw()
+
+```
+
+# References
